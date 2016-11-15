@@ -1,20 +1,29 @@
 language: objective-c
-xcode_project: PromiseKit.xcodeproj
+osx_image: xcode8
+
+env:
+  - PLATFORM=Mac
+  - PLATFORM=iOS NAME='iPhone SE'
+  - PLATFORM=tvOS NAME='Apple TV 1080p'
+  - PLATFORM=watchOS
+
 before_install:
-  - brew update
-  - brew install carthage
-install: carthage bootstrap --verbose
-xcode_scheme: [PMKiOS, PMKOSX]
-xcode_sdk: [iphonesimulator8.3, macosx10.10]
-osx_image: beta-xcode6.3
+  - if [ -n "$NAME" ]; then
+      export UUID=$(instruments -s | ruby -e "ARGF.each_line{ |ln| ln =~ /$NAME .* \[(.*)\]/; if \$1; puts(\$1); exit; end }");
+    fi
 
-matrix:
-  exclude:
-    - xcode_scheme: PMKOSX
-      xcode_sdk: iphonesimulator8.3
-    - xcode_scheme: PMKiOS
-      xcode_sdk: macosx10.10
+script:
+  - set -o pipefail;
+    case $PLATFORM in
+    Mac)
+      xcodebuild -scheme PromiseKit -enableCodeCoverage YES test | xcpretty;;
+    iOS|tvOS)
+      xcrun instruments -w "$UUID" || true;
+      sleep 15;
+      xcodebuild -scheme PromiseKit -destination "id=$UUID" -enableCodeCoverage YES test | xcpretty;;
+    watchOS)
+      xcodebuild -scheme PromiseKit -destination "name=Apple Watch - 38mm" | xcpretty;;
+    esac
 
-branches:
-  only:
-    - master
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
